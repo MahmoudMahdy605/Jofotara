@@ -43,7 +43,9 @@ app_license = "mit"
 # page_js = {"page" : "public/js/file.js"}
 
 # include js in doctype views
-# doctype_js = {"doctype" : "public/js/doctype.js"}
+doctype_js = {
+	"Sales Invoice" : "public/js/sales_invoice.js"
+}
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
 # doctype_calendar_js = {"doctype" : "public/js/doctype_calendar.js"}
@@ -82,8 +84,8 @@ app_license = "mit"
 # Installation
 # ------------
 
-# before_install = "jofotara.install.before_install"
-# after_install = "jofotara.install.after_install"
+before_install = "jofotara.install.before_install"
+after_install = "jofotara.install.after_install"
 
 # Uninstallation
 # ------------
@@ -137,13 +139,11 @@ app_license = "mit"
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-# 	"*": {
-# 		"on_update": "method",
-# 		"on_cancel": "method",
-# 		"on_trash": "method"
-# 	}
-# }
+doc_events = {
+	"Sales Invoice": {
+		"on_submit": "jofotara.events.sales_invoice.auto_generate_jofotara_xml"
+	}
+}
 
 # Scheduled Tasks
 # ---------------
@@ -170,6 +170,13 @@ app_license = "mit"
 # -------
 
 # before_tests = "jofotara.install.before_tests"
+
+# Commands
+# -------
+commands = [
+	"jofotara.commands",
+	"jofotara.commands.enable_jofotara"
+]
 
 # Overriding Methods
 # ------------------------------

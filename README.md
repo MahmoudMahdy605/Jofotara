@@ -1,16 +1,40 @@
-### Jofotara
+# JoFotara
 
-ERPNEXT Integration with Jordanian Tax Authority
+## ERPNEXT Integration with Jordanian Tax Authority
 
-### Installation
+JoFotara is an ERPNext application that integrates with the Jordanian Tax Authority's electronic invoicing system. This app adds the necessary fields and functionality to ERPNext to support compliance with Jordanian tax regulations.
+
+## Features
+
+- **Company Configuration**: Adds a dedicated JoFotara tab in the Company DocType with fields for configuring the integration with the Jordanian Tax Authority.
+- **Integration Settings**: Provides fields for Client ID, Secret Key, Device ID, API Endpoint, and Sandbox Mode configuration.
+- **Easy Setup**: All customizations are contained within the app and applied automatically during installation.
+
+## Customizations
+
+This app adds the following customizations to ERPNext:
+
+1. **Company DocType**:
+   - Adds a new tab labeled "JoFotara" after the "Stock and Manufacturing" tab
+   - Adds a section titled "JoFotara Settings" with the following fields:
+     - Enable JoFotara Integration (Check)
+     - Client ID (Data)
+     - Secret Key (Password)
+     - Device ID (Data)
+     - API Endpoint (Data)
+     - Is Sandbox Mode? (Check)
+
+## Installation
 
 You can install this app using the [bench](https://github.com/frappe/bench) CLI:
 
 ```bash
 cd $PATH_TO_YOUR_BENCH
-bench get-app $URL_OF_THIS_REPO --branch develop
+bench get-app https://github.com/YOUR_USERNAME/jofotara
 bench install-app jofotara
 ```
+
+After installation, the JoFotara tab will be available in the Company form.
 
 ### Contributing
 
