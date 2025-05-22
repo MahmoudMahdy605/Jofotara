@@ -72,3 +72,39 @@ frappe.ui.form.on('Sales Invoice', {
         });
     }
 });
+
+// check if the company is registered for sales tax
+frappe.ui.form.on('Sales Invoice', {
+    before_save: function(frm) {
+        // Skip check if already confirmed
+        if (frm._ignore_tax_warning || frm.doc.docstatus !== 0) return;
+
+        frappe.call({
+            method: "frappe.client.get_value",
+            args: {
+                doctype: "Company",
+                filters: { name: frm.doc.company },
+                fieldname: "is_sales_tax_registered"
+            },
+            callback: function(r) {
+                if (r.message && !r.message.is_sales_tax_registered && frm.doc.total_taxes_and_charges > 0) {
+                    frappe.validated = false; // Stop the save
+
+                    frappe.confirm(
+                        __("You are not registered for sales tax. This invoice includes taxes. Are you sure you want to continue on your responsibility?"),
+                        function () {
+                            // Set flag to prevent loop
+                            frm._ignore_tax_warning = true;
+
+                            // Try saving again
+                            frm.save();
+                        },
+                        function () {
+                            frappe.msgprint(__('Save cancelled.'));
+                        }
+                    );
+                }
+            }
+        });
+    }
+});

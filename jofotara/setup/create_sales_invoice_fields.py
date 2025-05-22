@@ -3,10 +3,23 @@ from frappe.custom.doctype.custom_field.custom_field import create_custom_field
 
 def execute():
     """
-    Create JoFotara custom fields in the Sales Invoice DocType.
-    This ensures the XML generation and submission process works properly.
+    Create or refresh JoFotara custom fields in the Sales Invoice DocType.
+    Ensures fields are added in correct order and cleaned up if needed.
     """
     try:
+        # Clean up old fields if they exist
+        custom_fields = frappe.get_all(
+            "Custom Field",
+            filters={"dt": "Sales Invoice", "fieldname": ["like", "jofotara%"]},
+            fields=["name"]
+        )
+        for field in custom_fields:
+            frappe.delete_doc("Custom Field", field.name)
+
+        frappe.db.commit()
+        print("🧹 Old JoFotara fields removed from Sales Invoice.")
+
+        # Define fields
         fields_to_create = [
             {
                 "fieldname": "jofotara_xml_generated",
@@ -41,16 +54,23 @@ def execute():
                 "fieldtype": "Small Text",
                 "insert_after": "jofotara_submission_time",
                 "read_only": 1
+            },
+            {
+                "fieldname": "jofotara_invoice_type_label",
+                "label": "JoFotara Invoice Type",
+                "fieldtype": "Read Only",
+                "insert_after": "jofotara_submission_response",
+                "read_only": 1
             }
         ]
 
+        # Create fields
         for field in fields_to_create:
             create_custom_field("Sales Invoice", field)
 
         frappe.db.commit()
         print("✅ JoFotara fields successfully added to Sales Invoice.")
-        print("You may now submit invoices and track JoFotara integration status.")
-        
+
     except Exception as e:
         frappe.log_error(str(e), "JoFotara Sales Invoice Field Creation Error")
-        print(f"❌ Error creating fields: {str(e)}")
+        print(f"❌ Error creating JoFotara fields: {str(e)}")

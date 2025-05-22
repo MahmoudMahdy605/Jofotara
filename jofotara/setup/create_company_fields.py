@@ -2,7 +2,9 @@ import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_field
 
 def execute():
-    """Ensure JoFotara fields are placed in their own tab at the very end of the Company form."""
+    """Ensure JoFotara fields are placed in their own tab at the very end of the Company form, and create tax registration field."""
+
+    # Clean up existing JoFotara fields
     try:
         custom_fields = frappe.get_all(
             "Custom Field",
@@ -13,15 +15,27 @@ def execute():
             frappe.delete_doc("Custom Field", field.name)
         frappe.db.commit()
         print("🧹 Removed old JoFotara fields.")
-
     except Exception as e:
         print(f"⚠️ Error cleaning fields: {str(e)}")
 
+    # Add is_sales_tax_registered before JoFotara tab
     try:
-        # Target last known field in the layout
+        create_custom_field("Company", {
+            "fieldname": "is_sales_tax_registered",
+            "label": "Is Sales Tax Registered?",
+            "fieldtype": "Check",
+            "insert_after": "tax_id",
+            "default": "0",
+            "description": "Enable this if the company is registered for General or Special Sales Tax."
+        })
+        print("✅ Added field: is_sales_tax_registered")
+    except Exception as e:
+        print(f"⚠️ Failed to create is_sales_tax_registered: {str(e)}")
+
+    # JoFotara fields and tab
+    try:
         last_field = "parent_company"
 
-        # Tab Break — at the end
         create_custom_field("Company", {
             "fieldname": "jofotara_tab",
             "label": "JoFotara",
@@ -29,7 +43,6 @@ def execute():
             "insert_after": last_field
         })
 
-        # Section inside tab
         create_custom_field("Company", {
             "fieldname": "jofotara_settings_section",
             "label": "JoFotara Settings",
@@ -38,7 +51,6 @@ def execute():
             "collapsible": 1
         })
 
-        # Fields
         fields = [
             {
                 "fieldname": "enable_jofotara_integration",
