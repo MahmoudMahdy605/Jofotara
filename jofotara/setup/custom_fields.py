@@ -41,7 +41,7 @@ def create_jofotara_custom_fields():
             {
                 "fieldname": "jofotara_secret_key",
                 "label": "Secret Key",
-                "fieldtype": "Password",
+                "fieldtype": "Data",
                 "insert_after": "jofotara_client_id",
                 "depends_on": "eval:doc.enable_jofotara_integration",
             },

@@ -1,6 +1,16 @@
 import frappe
 from frappe.custom.doctype.custom_field.custom_field import create_custom_field
 
+def create_or_update_custom_field(doctype, field_def):
+    existing = frappe.db.exists("Custom Field", f"{doctype}-{field_def['fieldname']}")
+    if existing:
+        doc = frappe.get_doc("Custom Field", existing)
+        for key, value in field_def.items():
+            setattr(doc, key, value)
+        doc.save()
+    else:
+        create_custom_field(doctype, field_def)
+
 def execute():
     """Ensure JoFotara fields are placed in their own tab at the very end of the Company form, and create tax registration field."""
 
@@ -20,7 +30,7 @@ def execute():
 
     # Add is_sales_tax_registered before JoFotara tab
     try:
-        create_custom_field("Company", {
+        create_or_update_custom_field("Company", {
             "fieldname": "is_sales_tax_registered",
             "label": "Is Sales Tax Registered?",
             "fieldtype": "Check",
@@ -36,14 +46,14 @@ def execute():
     try:
         last_field = "parent_company"
 
-        create_custom_field("Company", {
+        create_or_update_custom_field("Company", {
             "fieldname": "jofotara_tab",
             "label": "JoFotara",
             "fieldtype": "Tab Break",
             "insert_after": last_field
         })
 
-        create_custom_field("Company", {
+        create_or_update_custom_field("Company", {
             "fieldname": "jofotara_settings_section",
             "label": "JoFotara Settings",
             "fieldtype": "Section Break",
@@ -68,7 +78,8 @@ def execute():
             {
                 "fieldname": "jofotara_secret_key",
                 "label": "Secret Key",
-                "fieldtype": "Password",
+                "fieldtype": "Data",
+                "length": 512,
                 "insert_after": "jofotara_client_id"
             },
             {
@@ -110,7 +121,7 @@ def execute():
 
         for field in fields:
             field["depends_on"] = "eval:doc.enable_jofotara_integration"
-            create_custom_field("Company", field)
+            create_or_update_custom_field("Company", field)
 
         frappe.db.commit()
         print("✅ JoFotara tab created successfully at the end.")

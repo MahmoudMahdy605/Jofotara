@@ -62,7 +62,7 @@ def fix_jofotara_integration():
                 {
                     "fieldname": "jofotara_secret_key",
                     "label": "Secret Key",
-                    "fieldtype": "Password",
+                    "fieldtype": "Data",
                     "insert_after": "jofotara_client_id"
                 },
                 {

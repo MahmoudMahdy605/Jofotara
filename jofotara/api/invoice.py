@@ -1,92 +1,117 @@
 import frappe
-from frappe import _
-from jofotara.xml.generator import generate_jofotara_invoice_xml
+import os
+import uuid
+from frappe.model.document import Document
+from jofotara.api.client import send_invoice_to_jofotara
 
-@frappe.whitelist()
-def generate_and_view_xml(doctype, docname):
+
+def generate_jofotara_invoice_xml(docname):
     """
-    Generate JoFotara XML for a document and return it for viewing
-    
-    Args:
-        doctype: Document type (e.g., 'Sales Invoice')
-        docname: Document name
-        
-    Returns:
-        str: XML content
+    Generate UBL-compliant XML for the given Sales Invoice.
+    Saves the XML file under public/files and updates the doc.
     """
-    try:
-        # Check permissions
-        if not frappe.has_permission(doctype, "read", docname):
-            frappe.throw(_("You don't have permission to access this document"))
-            
-        # Get the document
-        doc = frappe.get_doc(doctype, docname)
-        
-        # Check if JoFotara integration is enabled for this company
-        company = frappe.get_doc("Company", doc.company)
-        if not hasattr(company, "enable_jofotara_integration") or not company.enable_jofotara_integration:
-            frappe.throw(_("JoFotara integration is not enabled for company {0}").format(doc.company))
-        
-        # Generate XML
-        xml_content = generate_jofotara_invoice_xml(doc)
-        
-        # Save XML as an attachment if it doesn't exist
-        if not doc.get("jofotara_xml_file"):
-            attachment = frappe.get_doc({
-                "doctype": "File",
-                "file_name": f"{doc.name}_jofotara.xml",
-                "attached_to_doctype": doctype,
-                "attached_to_name": docname,
-                "content": xml_content,
-                "is_private": 1
-            })
-            attachment.insert()
-            
-            # Update custom fields
-            doc.db_set("jofotara_xml_generated", 1)
-            doc.db_set("jofotara_xml_file", attachment.file_url)
-            
-            # Add comment
-            doc.add_comment("Info", _("JoFotara XML has been generated and attached to this document"))
-        
-        return xml_content
-        
-    except Exception as e:
-        frappe.log_error(f"Error generating JoFotara XML for {docname}: {str(e)}", 
-                        "JoFotara XML Generation Error")
-        frappe.throw(_("Failed to generate JoFotara XML: {0}").format(str(e)))
+    doc = frappe.get_doc("Sales Invoice", docname)
+    company = frappe.get_doc("Company", doc.company)
+    customer = frappe.get_doc("Customer", doc.customer)
+
+    invoice_uuid = str(uuid.uuid4())
+
+    xml_content = f'''<?xml version="1.0" encoding="UTF-8"?>
+<Invoice xmlns="urn:oasis:names:specification:ubl:schema:xsd:Invoice-2"
+         xmlns:cac="urn:oasis:names:specification:ubl:schema:xsd:CommonAggregateComponents-2"
+         xmlns:cbc="urn:oasis:names:specification:ubl:schema:xsd:CommonBasicComponents-2">
+    <cbc:ProfileID>reporting:1.0</cbc:ProfileID>
+    <cbc:ID>{doc.name}</cbc:ID>
+    <cbc:UUID>{invoice_uuid}</cbc:UUID>
+    <cbc:IssueDate>{doc.posting_date}</cbc:IssueDate>
+    <cbc:InvoiceTypeCode name="012">388</cbc:InvoiceTypeCode>
+    <cbc:DocumentCurrencyCode>{doc.currency}</cbc:DocumentCurrencyCode>
+
+    <cac:AccountingSupplierParty>
+        <cac:Party>
+            <cac:PartyTaxScheme>
+                <cbc:CompanyID>{company.tax_id or "000000000"}</cbc:CompanyID>
+                <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+            </cac:PartyTaxScheme>
+            <cac:PartyLegalEntity>
+                <cbc:RegistrationName>{company.company_name or company.name}</cbc:RegistrationName>
+            </cac:PartyLegalEntity>
+        </cac:Party>
+    </cac:AccountingSupplierParty>
+
+    <cac:AccountingCustomerParty>
+        <cac:Party>
+            <cac:PartyLegalEntity>
+                <cbc:RegistrationName>{customer.customer_name or doc.customer}</cbc:RegistrationName>
+            </cac:PartyLegalEntity>
+            <cac:PartyTaxScheme>
+                <cbc:CompanyID>{customer.tax_id or "000000000"}</cbc:CompanyID>
+                <cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme>
+            </cac:PartyTaxScheme>
+        </cac:Party>
+    </cac:AccountingCustomerParty>
+'''
+
+    for i, item in enumerate(doc.items, start=1):
+        xml_content += f'''
+    <cac:InvoiceLine>
+        <cbc:ID>{i}</cbc:ID>
+        <cbc:InvoicedQuantity unitCode="PCE">{item.qty}</cbc:InvoicedQuantity>
+        <cbc:LineExtensionAmount currencyID="{doc.currency}">{item.amount}</cbc:LineExtensionAmount>
+        <cac:Item><cbc:Name>{item.item_name}</cbc:Name></cac:Item>
+        <cac:Price><cbc:PriceAmount currencyID="{doc.currency}">{item.rate}</cbc:PriceAmount></cac:Price>
+    </cac:InvoiceLine>
+'''
+
+    xml_content += f'''
+    <cac:LegalMonetaryTotal>
+        <cbc:TaxExclusiveAmount currencyID="{doc.currency}">{doc.net_total}</cbc:TaxExclusiveAmount>
+        <cbc:TaxInclusiveAmount currencyID="{doc.currency}">{doc.grand_total}</cbc:TaxInclusiveAmount>
+        <cbc:PayableAmount currencyID="{doc.currency}">{doc.rounded_total}</cbc:PayableAmount>
+    </cac:LegalMonetaryTotal>
+</Invoice>'''
+
+    filename = f"{doc.name}_jofotara.xml"
+    filepath = frappe.get_site_path("public", "files", filename)
+
+    with open(filepath, "w", encoding="utf-8") as f:
+        f.write(xml_content)
+
+    doc.db_set("jofotara_xml_file", filename)
+    return xml_content
 
 
 @frappe.whitelist()
 def submit_to_jofotara(docname):
     """
-    Manually submits the JoFotara XML for a Sales Invoice to the JoFotara API.
-    Called from the 'Submit to JoFotara' button in the UI.
+    Submit Sales Invoice XML to JoFotara and store response.
     """
-    try:
-        doc = frappe.get_doc("Sales Invoice", docname)
+    doc = frappe.get_doc("Sales Invoice", docname)
 
-        if not doc.get("jofotara_xml_generated"):
-            frappe.throw(_("XML not generated yet. Please generate it first."))
+    # Generate XML if not already attached
+    if not doc.jofotara_xml_file:
+        xml = generate_jofotara_invoice_xml(docname)
+    else:
+        xml_path = doc.jofotara_xml_file
 
-        # Load the XML content from file
-        file_doc = frappe.get_all("File", filters={
-            "attached_to_doctype": "Sales Invoice",
-            "attached_to_name": docname,
-            "file_name": f"{docname}_jofotara.xml"
-        }, fields=["name", "file_url", "content"], limit=1)
+        if xml_path.startswith("/private/files/"):
+            full_path = frappe.get_site_path("private", "files", os.path.basename(xml_path))
+        else:
+            full_path = frappe.get_site_path("public", "files", os.path.basename(xml_path))
 
-        if not file_doc:
-            frappe.throw(_("JoFotara XML file not found for this invoice."))
+        with open(full_path, "r", encoding="utf-8") as f:
+            xml = f.read()
 
-        xml_content = file_doc[0].get("content")
+    # Submit to JoFotara
+    result = send_invoice_to_jofotara(doc, xml)
 
-        # TODO: Replace with actual API call to JoFotara
-        # Simulated success message
-        doc.add_comment("Info", _("JoFotara XML manually submitted successfully."))
-        frappe.msgprint(_("✅ JoFotara XML manually submitted for {0}.").format(docname))
-        return "success"
+    if result["status"] == "success":
+        doc.db_set("jofotara_submission_status", "Submitted")
+        doc.db_set("jofotara_submission_time", frappe.utils.now())
+        doc.db_set("jofotara_submission_response", str(result["response"]))
+    else:
+        doc.db_set("jofotara_submission_status", "Rejected")
+        doc.db_set("jofotara_submission_time", frappe.utils.now())
+        doc.db_set("jofotara_submission_response", result.get("error") or "Unknown error")
 
-    except Exception as e:
-        frappe.log_error(frappe.get_traceback(), "JoFotara Manual Submission Error")
-        frappe.throw(_("❌ Failed to manually submit XML: {0}").format(str(e)))
+    return result
