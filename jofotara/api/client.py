@@ -21,12 +21,16 @@ def send_invoice_to_jofotara(sales_invoice, xml_string):
             frappe.throw("JoFotara integration is not enabled for this company.")
 
         # Get API config
-        url = company.jofotara_api_url or company.jofotara_api_endpoint
+        url = company.jofotara_api_url or company.jofotara_api_endpoint or "https://backend.jofotara.gov.jo/core/invoices/"
         client_id = company.jofotara_client_id
+        
+        # Try to get encrypted secret key first, fallback to regular field
         secret_key = get_decrypted_password("Company", company.name, "jofotara_secret_key", raise_exception=False)
+        if not secret_key:
+            secret_key = company.get("jofotara_secret_key")
 
-        if not url or not client_id or not secret_key:
-            frappe.throw("JoFotara API URL, Client ID or Secret Key is missing.")
+        if not client_id or not secret_key:
+            frappe.throw("JoFotara Client ID or Secret Key is missing. Please configure them in Company settings.")
 
         # Encode XML as base64
         xml_bytes = xml_string.encode('utf-8')
