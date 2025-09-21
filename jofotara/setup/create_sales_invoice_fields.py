@@ -61,6 +61,13 @@ def execute():
                 "fieldtype": "Read Only",
                 "insert_after": "jofotara_submission_response",
                 "read_only": 1
+            },
+            {
+                "fieldname": "jofotara_qr_code",
+                "label": "JoFotara QR Code",
+                "fieldtype": "Long Text",
+                "insert_after": "jofotara_invoice_type_label",
+                "read_only": 1
             }
         ]
 
